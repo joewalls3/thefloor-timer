@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TheFloor Timer Controller</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="controller">
+    <header class="header">
+      <h1>TheFloor Timer</h1>
+      <p>Use this controller from the main computer or any connected phone.</p>
+    </header>
+
+    <section class="scoreboard">
+      <article class="clock-card" id="cardA">
+        <div class="team-name" id="nameA">TEAM A</div>
+        <div class="big-time" id="timeA">05:00</div>
+        <div class="status" id="statusA">Ready</div>
+      </article>
+      <article class="clock-card" id="cardB">
+        <div class="team-name" id="nameB">TEAM B</div>
+        <div class="big-time" id="timeB">05:00</div>
+        <div class="status" id="statusB">Ready</div>
+      </article>
+    </section>
+
+    <section class="remote-grid">
+      <button class="remote-button" id="pressA">Team A finished</button>
+      <button class="remote-button" id="pressB">Team B finished</button>
+    </section>
+
+    <section class="control-row">
+      <button id="toggle">Start / Pause</button>
+      <button id="reset">Reset</button>
+      <button id="fullscreen">Fullscreen</button>
+    </section>
+
+    <section class="time-adjust-panel">
+      <div class="time-adjust-header">
+        <div>
+          <h2>Adjust Time Live</h2>
+          <p>Add or remove time without stopping the event.</p>
+        </div>
+        <div class="field compact-field">
+          <label for="adjustSeconds">Custom seconds</label>
+          <input id="adjustSeconds" type="number" min="1" max="3600" value="30">
+        </div>
+      </div>
+      <div class="time-adjust-grid">
+        <div class="time-adjust-team">
+          <h3 id="adjustNameA">TEAM A</h3>
+          <div class="adjust-buttons">
+            <button data-team="A" data-seconds="60">+1:00</button>
+            <button data-team="A" data-seconds="30">+0:30</button>
+            <button data-team="A" data-custom="add">+ Custom</button>
+            <button class="danger-button" data-team="A" data-seconds="-30">−0:30</button>
+          </div>
+        </div>
+        <div class="time-adjust-team">
+          <h3 id="adjustNameB">TEAM B</h3>
+          <div class="adjust-buttons">
+            <button data-team="B" data-seconds="60">+1:00</button>
+            <button data-team="B" data-seconds="30">+0:30</button>
+            <button data-team="B" data-custom="add">+ Custom</button>
+            <button class="danger-button" data-team="B" data-seconds="-30">−0:30</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="settings">
+      <div class="settings-grid">
+        <div class="field"><label for="teamAName">Team A name</label><input id="teamAName" value="TEAM A" maxlength="30"></div>
+        <div class="field"><label for="teamBName">Team B name</label><input id="teamBName" value="TEAM B" maxlength="30"></div>
+        <div class="field"><label for="minutes">Minutes</label><input id="minutes" type="number" min="0" max="999" value="5"></div>
+        <div class="field"><label for="seconds">Seconds</label><input id="seconds" type="number" min="0" max="59" value="0"></div>
+      </div>
+      <button id="apply">Apply settings and reset</button>
+    </section>
+
+    <section class="links">
+      <strong>Display links:</strong><br>
+      Team A: <code id="teamALink"></code><br>
+      Team B: <code id="teamBLink"></code>
+    </section>
+  </main>
+
+  <script type="module">
+    import { connectToState, estimateRemaining, formatTime, sendAction } from "/shared.js";
+    const $ = id => document.getElementById(id);
+    let currentState = null;
+
+    function render() {
+      if (!currentState) return requestAnimationFrame(render);
+      $("nameA").textContent = currentState.teamAName;
+      $("nameB").textContent = currentState.teamBName;
+      $("adjustNameA").textContent = currentState.teamAName;
+      $("adjustNameB").textContent = currentState.teamBName;
+      $("timeA").textContent = formatTime(estimateRemaining(currentState, "A"));
+      $("timeB").textContent = formatTime(estimateRemaining(currentState, "B"));
+
+      for (const team of ["A", "B"]) {
+        const card = $(`card${team}`);
+        card.classList.toggle("active", currentState.running && currentState.activeTeam === team);
+        card.classList.toggle("expired", currentState.expiredTeam === team);
+        $(`status${team}`).textContent = currentState.expiredTeam === team ? "Time expired" : currentState.running && currentState.activeTeam === team ? "Running" : currentState.running ? "Waiting" : currentState.activeTeam === team ? "Paused" : "Ready";
+      }
+      requestAnimationFrame(render);
+    }
+
+    connectToState(state => {
+      currentState = state;
+      $("teamAName").value = state.teamAName;
+      $("teamBName").value = state.teamBName;
+    });
+
+    $("pressA").onclick = () => sendAction("pressA");
+    $("pressB").onclick = () => sendAction("pressB");
+    $("toggle").onclick = () => sendAction("toggle");
+    $("reset").onclick = () => sendAction("reset");
+    $("fullscreen").onclick = () => !document.fullscreenElement ? document.documentElement.requestFullscreen() : document.exitFullscreen();
+
+    async function adjustTime(team, seconds) {
+      const response = await fetch("/api/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "adjustTime", team, deltaMs: seconds * 1000 })
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        alert(data.error || "Could not adjust time");
+      }
+    }
+
+    document.querySelectorAll("[data-team]").forEach(button => {
+      button.addEventListener("click", () => {
+        const seconds = button.dataset.custom ? Math.max(1, Math.min(3600, Number($("adjustSeconds").value) || 30)) : Number(button.dataset.seconds);
+        adjustTime(button.dataset.team, seconds);
+      });
+    });
+
+    $("apply").onclick = async () => {
+      const response = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teamAName: $("teamAName").value,
+          teamBName: $("teamBName").value,
+          minutes: $("minutes").value,
+          seconds: $("seconds").value
+        })
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        alert(data.error || "Could not apply settings");
+      }
+    };
+
+    $("teamALink").textContent = `${location.origin}/team-a`;
+    $("teamBLink").textContent = `${location.origin}/team-b`;
+
+    document.addEventListener("keydown", event => {
+      if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
+      if (event.code === "Space") { event.preventDefault(); sendAction("toggle"); }
+      else if (event.key.toLowerCase() === "a") sendAction("pressA");
+      else if (event.key.toLowerCase() === "l") sendAction("pressB");
+      else if (event.key.toLowerCase() === "r") sendAction("reset");
+    });
+
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>
