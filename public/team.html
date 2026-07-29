@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Team Timer Display</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="team-display" id="display">
+    <div>
+      <div class="display-name" id="name">TEAM</div>
+      <div class="display-time" id="time">05:00</div>
+      <div class="display-status" id="status">Ready</div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { connectToState, estimateRemaining, formatTime } from "/shared.js";
+
+    const team = location.pathname.endsWith("team-b") ? "B" : "A";
+    const display = document.getElementById("display");
+    const name = document.getElementById("name");
+    const time = document.getElementById("time");
+    const status = document.getElementById("status");
+    let currentState = null;
+
+    function render() {
+      if (currentState) {
+        name.textContent = team === "A" ? currentState.teamAName : currentState.teamBName;
+        time.textContent = formatTime(estimateRemaining(currentState, team));
+        const active = currentState.running && currentState.activeTeam === team;
+        const expired = currentState.expiredTeam === team;
+        display.classList.toggle("active", active);
+        display.classList.toggle("expired", expired);
+        status.textContent = expired ? "Time expired" : active ? "Clock running" : currentState.running ? "Waiting" : "Paused / ready";
+      }
+      requestAnimationFrame(render);
+    }
+
+    connectToState(state => currentState = state);
+    document.addEventListener("dblclick", () => !document.fullscreenElement ? document.documentElement.requestFullscreen() : document.exitFullscreen());
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>
