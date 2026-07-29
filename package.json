@@ -1,0 +1,15 @@
+{
+  "name": "thefloor-timer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Synchronized two-team timer with controller, team displays, remote triggers, and live time adjustments.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
